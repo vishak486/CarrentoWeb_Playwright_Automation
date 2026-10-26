@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import { defineConfig, devices } from '@playwright/test';
 
 /**
@@ -38,9 +40,23 @@ export default defineConfig({
   /* Configure projects for major browsers */
   projects: [
     {
+    name: 'setup',
+    testMatch: 'auth.setup.ts',
+    },
+    {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: ['auth.setup.ts', 'admin/**'],
     },
+    {
+    name: 'admin',
+    testMatch: 'admin/**/*.spec.ts',
+    use: {
+      ...devices['Desktop Chrome'],
+      storageState: 'playwright/.auth/admin.json',
+    },
+    dependencies: ['setup'],
+   },
 
     // {
     //   name: 'firefox',
