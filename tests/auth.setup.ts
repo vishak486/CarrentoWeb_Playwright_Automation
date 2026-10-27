@@ -9,3 +9,13 @@ setup('authenticate as admin', async ({ page }) => {
     await expect(page).toHaveURL(/\/Admin/);
     await page.context().storageState({ path: adminFile });
 })
+
+const customerFile = 'playwright/.auth/customer.json';
+
+setup('authenticate as customer', async ({ page }) => {
+  const loginPage = new LoginPage(page);
+  await loginPage.goto();
+  await loginPage.login(process.env.CUSTOMER_EMAIL!, process.env.CUSTOMER_PASSWORD!);
+  await expect(page.getByRole('link', { name: 'Login' })).toBeHidden();
+  await page.context().storageState({ path: customerFile });
+});

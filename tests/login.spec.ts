@@ -17,3 +17,13 @@ test('admin can log in and reach the dashboard', async ({ page }) => {
     await expect(page).toHaveURL(/\/Admin/);
     await expect(page.getByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
 })
+
+test('customer can log in and lands on the home page', async ({ page }) => {
+  const loginPage = new LoginPage(page);
+
+  await loginPage.goto();
+  await loginPage.login(process.env.CUSTOMER_EMAIL!, process.env.CUSTOMER_PASSWORD!);
+
+  await expect(page).toHaveURL(/carrentoweb\.runasp\.net\/?$/);
+  await expect(page.getByRole('link', { name: 'Login' })).toBeHidden();
+});
