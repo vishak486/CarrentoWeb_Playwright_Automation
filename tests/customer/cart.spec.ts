@@ -3,6 +3,8 @@ import { CarDetailsPage } from '../pages/CarDetailsPage';
 import { CartPage } from '../pages/CartPage';
 import { futureDate } from '../../utils/dates';
 import { addFirstCarToCart } from '../helpers/cart';
+import { stubRazorpay } from '../helpers/razorpay';
+import { OrdersPage } from '../pages/OrdersPage';
 
 // All tests here share one customer cart, so they must not run in parallel
 test.describe.configure({ mode: 'serial' });
@@ -72,4 +74,46 @@ test('cart shows correct days, subtotal and grand total', async ({ page }) => {
   // Clean up so the cart is empty again
   await row.getByRole('button', { name: 'Remove' }).click();
   await expect(row).toBeHidden();
+});
+
+test('customer pays with a stubbed Razorpay checkout, then admin cancels the order', async ({ page, browser }) => {
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  test.skip(!keySecret, 'RAZORPAY_KEY_SECRET is not set');
+
+  await stubRazorpay(page, keySecret!);
+  const carName = await addFirstCarToCart(page, 2);
+
+  // Checkout and pay (the order is created on the server, then the stub "pays")
+  await page.getByRole('link', { name: 'Proceed to Checkout' }).click();
+  await expect(page).toHaveURL(/\/Customer\/Checkout/);
+  await page.getByRole('button', { name: 'Pay', exact: true }).click();
+
+  await expect(page).toHaveURL(/\/Customer\/Order\/Success\?orderId=\d+/, { timeout: 20000 });
+  await expect(page.getByRole('heading', { name: 'Payment Successful' })).toBeVisible();
+  const orderId = new URL(page.url()).searchParams.get('orderId')!;
+
+  // The order appears in My Orders as Completed
+  await page.goto('/Customer/Order');
+  const myRow = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name: orderId, exact: true }) });
+  await expect(myRow).toContainText('Completed');
+  await expect(myRow).toContainText(carName);
+
+  // Clean up: an admin session cancels the order (this also marks the payment refunded)
+  const adminContext = await browser.newContext({
+    baseURL: test.info().project.use.baseURL,
+    storageState: 'playwright/.auth/admin.json',
+  });
+  const adminPage = await adminContext.newPage();
+  const ordersPage = new OrdersPage(adminPage);
+  await ordersPage.goto();
+
+  const adminRow = adminPage
+    .getByRole('row')
+    .filter({ has: adminPage.getByRole('cell', { name: orderId, exact: true }) });
+  adminPage.once('dialog', (dialog) => dialog.accept());
+  await adminRow.getByRole('button', { name: 'Cancel' }).click();
+  await expect(adminRow).toContainText('Cancelled');
+  await adminContext.close();
 });
